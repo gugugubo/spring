@@ -60,9 +60,11 @@ public abstract class BeanDefinitionReaderUtils {
 		GenericBeanDefinition bd = new GenericBeanDefinition();
 		bd.setParentName(parentName);
 		if (className != null) {
+			//classLoader 不为null，则设置bd中的beanClass字段 为 class对象。
 			if (classLoader != null) {
 				bd.setBeanClass(ClassUtils.forName(className, classLoader));
 			}
+			//否则，bd中保留className就可以了。
 			else {
 				bd.setBeanClassName(className);
 			}

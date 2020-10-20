@@ -43,12 +43,14 @@ import org.springframework.util.ObjectUtils;
  * @see java.nio.charset.Charset
  */
 public class EncodedResource implements InputStreamSource {
-
+	//包装的resource
 	private final Resource resource;
 
+	//指定的编码格式
 	@Nullable
 	private final String encoding;
 
+	//指定的字符集
 	@Nullable
 	private final Charset charset;
 
