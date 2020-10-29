@@ -54,6 +54,7 @@ public class SimpleAliasRegistry implements AliasRegistry {
 		Assert.hasText(name, "'name' must not be empty");
 		Assert.hasText(alias, "'alias' must not be empty");
 		synchronized (this.aliasMap) {
+			// 1.判断alias和 beanName是否相同 直接判断alias和 bean 是否相等，相等则认为alias其实就是 beanName，将该alias从 Map 中删除。
 			if (alias.equals(name)) {
 				this.aliasMap.remove(alias);
 				if (logger.isDebugEnabled()) {
@@ -62,11 +63,13 @@ public class SimpleAliasRegistry implements AliasRegistry {
 			}
 			else {
 				String registeredName = this.aliasMap.get(alias);
+				// 2.判断该alias是否已经注册 如果该alias已经注册，并且beanName 和已注册的 beanName 相等，则认为该组合已经注册，不需要重复注册。
 				if (registeredName != null) {
 					if (registeredName.equals(name)) {
 						// An existing alias - no need to re-register
 						return;
 					}
+					// 3. 判断alias是否可被覆盖 如果 alias 已注册，但是 beanName 不同，那么判断该别名的注册是否可以被覆盖（默认是可以覆盖），可以覆盖则直接将已有的 alias 和 beanName 关系覆盖掉。
 					if (!allowAliasOverriding()) {
 						throw new IllegalStateException("Cannot define alias '" + alias + "' for name '" +
 								name + "': It is already registered for name '" + registeredName + "'.");
@@ -76,7 +79,9 @@ public class SimpleAliasRegistry implements AliasRegistry {
 								registeredName + "' with new target name '" + name + "'");
 					}
 				}
+				// 4. 判断alias和 beanName是否是循环别名 反向检查 alias 和 beanName 在 map 中是否互为k-v，如果是则抛出异常，别名注册失败。
 				checkForAliasCircle(name, alias);
+				//5. 注册别名 在一系列检查都通过后，通过 Map 的 put 方法将alias 和 beanName注册进 map 中，其中 key 为 alias，Map 为 beanName。
 				this.aliasMap.put(alias, name);
 				if (logger.isTraceEnabled()) {
 					logger.trace("Alias definition '" + alias + "' registered for name '" + name + "'");
@@ -205,6 +210,9 @@ public class SimpleAliasRegistry implements AliasRegistry {
 	 * Determine the raw name, resolving aliases to canonical names.
 	 * @param name the user-specified name
 	 * @return the transformed name
+	 * 	//aliasMap保存别名信息。
+	 * 	//{"C":"B", "B":"A"} A有一个别名叫做“B”，但是别名“B” 它又被别名了，它有一个别名叫做“C”
+	 * 	//假设 get时 传的是C，那最终要得到什么? 要得到“A”.
 	 */
 	public String canonicalName(String name) {
 		String canonicalName = name;

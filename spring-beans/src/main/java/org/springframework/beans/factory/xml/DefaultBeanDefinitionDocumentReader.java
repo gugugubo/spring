@@ -159,7 +159,7 @@ public class DefaultBeanDefinitionDocumentReader implements BeanDefinitionDocume
 
 		//这里是留给子类扩展的地方。
 		preProcessXml(root);
-
+	
 		parseBeanDefinitions(root, this.delegate);
 
 		//这里是留给子类扩展的地方。

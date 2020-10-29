@@ -1255,6 +1255,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			Object result = getAutowireCandidateResolver().getLazyResolutionProxyIfNecessary(
 					descriptor, requestingBeanName);
 			if (result == null) {
+				// 解析依赖
 				result = doResolveDependency(descriptor, requestingBeanName, autowiredBeanNames, typeConverter);
 			}
 			return result;
@@ -1267,12 +1268,15 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 
 		InjectionPoint previousInjectionPoint = ConstructorResolver.setCurrentInjectionPoint(descriptor);
 		try {
+			// 该方法最终调用了 beanFactory.getBean(String, Class)，从容器中获取依赖
 			Object shortcut = descriptor.resolveShortcut(this);
+			// 如果容器中存在所需依赖，这里进行断路操作，提前结束依赖解析逻辑
 			if (shortcut != null) {
 				return shortcut;
 			}
 
 			Class<?> type = descriptor.getDependencyType();
+			// 处理 @value 注解
 			Object value = getAutowireCandidateResolver().getSuggestedValue(descriptor);
 			if (value != null) {
 				if (value instanceof String) {
@@ -1292,15 +1296,40 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 							converter.convertIfNecessary(value, type, descriptor.getMethodParameter()));
 				}
 			}
-
+			// 解析数组、list、map 等类型的依赖
 			Object multipleBeans = resolveMultipleBeans(descriptor, beanName, autowiredBeanNames, typeConverter);
 			if (multipleBeans != null) {
 				return multipleBeans;
 			}
-
+			/*
+			 * 按类型查找候选列表，如果某个类型已经被实例化，则返回相应的实例。
+			 * 比如下面的配置：
+			 *
+			 *   <bean name="mongoDao" class="xyz.coolblog.autowire.MongoDao" primary="true"/>
+			 *   <bean name="service" class="xyz.coolblog.autowire.Service" autowire="byType"/>
+			 *   <bean name="mysqlDao" class="xyz.coolblog.autowire.MySqlDao"/>
+			 *
+			 * MongoDao 和 MySqlDao 均实现自 Dao 接口，Service 对象（不是接口）中有一个 Dao
+			 * 类型的属性。现在根据类型自动注入 Dao 的实现类。这里有两个候选 bean，一个是
+			 * mongoDao，另一个是 mysqlDao，其中 mongoDao 在 service 之前实例化，
+			 * mysqlDao 在 service 之后实例化。此时 findAutowireCandidates 方法会返回如下的结果：
+			 *
+			 *   matchingBeans = [ <mongoDao, Object@MongoDao>, <mysqlDao, Class@MySqlDao> ]
+			 *
+			 * 注意 mysqlDao 还未实例化，所以返回的是 MySqlDao.class。
+			 *
+			 * findAutowireCandidates 这个方法逻辑比较复杂，我简单说一下它的工作流程吧，如下：
+			 *   1. 从 BeanFactory 中获取某种类型 bean 的名称，比如上面的配置中
+			 *      mongoDao 和 mysqlDao 均实现了 Dao 接口，所以他们是同一种类型的 bean。
+			 *   2. 遍历上一步得到的名称列表，并判断 bean 名称对应的 bean 是否是合适的候选项，
+			 *      若合适则添加到候选列表中，并在最后返回候选列表
+			 *
+			 * findAutowireCandidates 比较复杂，我并未完全搞懂，就不深入分析了。见谅
+			 */
 			Map<String, Object> matchingBeans = findAutowireCandidates(beanName, type, descriptor);
 			if (matchingBeans.isEmpty()) {
 				if (isRequired(descriptor)) {
+					// 抛出 NoSuchBeanDefinitionException 异常
 					raiseNoMatchingBeanFound(type, descriptor.getResolvableType(), descriptor);
 				}
 				return null;
@@ -1308,8 +1337,19 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 
 			String autowiredBeanName;
 			Object instanceCandidate;
-
+			// 多一个候选项，直接取出来即可
 			if (matchingBeans.size() > 1) {
+				/*
+				 * matchingBeans.size() > 1，则表明存在多个可注入的候选项，这里判断使用哪一个
+				 * 候选项。比如下面的配置：
+				 *
+				 *   <bean name="mongoDao" class="xyz.coolblog.autowire.MongoDao" primary="true"/>
+				 *   <bean name="mysqlDao" class="xyz.coolblog.autowire.MySqlDao"/>
+				 *
+				 * mongoDao 的配置中存在 primary 属性，所以 mongoDao 会被选为最终的候选项。如
+				 * 果两个 bean 配置都没有 primary 属性，则需要根据优先级选择候选项。优先级这一块
+				 * 的逻辑没细看，不多说了。
+				 */
 				autowiredBeanName = determineAutowireCandidate(matchingBeans, descriptor);
 				if (autowiredBeanName == null) {
 					if (isRequired(descriptor) || !indicatesMultipleBeans(type)) {
@@ -1324,6 +1364,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 				}
 				instanceCandidate = matchingBeans.get(autowiredBeanName);
 			}
+			// 只有一个候选项，直接取出来即可
 			else {
 				// We have exactly one match.
 				Map.Entry<String, Object> entry = matchingBeans.entrySet().iterator().next();
@@ -1334,6 +1375,8 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			if (autowiredBeanNames != null) {
 				autowiredBeanNames.add(autowiredBeanName);
 			}
+
+			// 返回候选项实例，如果实例是 Class 类型，则调用 beanFactory.getBean(String, Class) 获取相应的 bean。否则直接返回即可
 			if (instanceCandidate instanceof Class) {
 				instanceCandidate = descriptor.resolveCandidate(autowiredBeanName, type, this);
 			}

@@ -124,40 +124,72 @@ class ConstructorResolver {
 	 */
 	public BeanWrapper autowireConstructor(String beanName, RootBeanDefinition mbd,
 			@Nullable Constructor<?>[] chosenCtors, @Nullable Object[] explicitArgs) {
-
+		/**
+		 * 1. 创建 BeanWrapperImpl 对象
+		 * 2. 解析构造方法参数，并算出 minNrOfArgs
+		 * 3. 获取构造方法列表，并排序
+		 * 4. 遍历排序好的构造方法列表，筛选合适的构造方法
+		 *    1. 获取构造方法参数列表中每个参数的名称
+		 *    2. 再次解析参数，此次解析会将value 属性值进行类型转换，由 String 转为合适的类型。
+		 *    3. 计算构造方法参数列表与参数值列表之间的类型差异量，以筛选出更为合适的构造方法
+		 * 5. 缓存已筛选出的构造方法以及参数值列表，若再次创建 bean 实例时，可直接使用，无需再次进行筛选
+		 * 6. 使用初始化策略创建 bean 对象
+		 * 7. 将 bean 对象放入 BeanWrapperImpl 对象中，并返回该对象
+		 */
+		// 创建 BeanWrapperImpl 对象
 		BeanWrapperImpl bw = new BeanWrapperImpl();
+
+		//1.向wrapper中注册 conversion
+		//2.向wrapper中注册 属性编辑器..
 		this.beanFactory.initBeanWrapper(bw);
 
+		//实例化反射调用的构造器
 		Constructor<?> constructorToUse = null;
+		//实例化时真正去用的参数 里面存有arguments 对象，在后面的操作中将会将arguments赋给argsToUse 。
 		ArgumentsHolder argsHolderToUse = null;
+		//实例化时使用的参数。
 		Object[] argsToUse = null;
 
+		// 下面的if和else就是为了确定参数值列表（argsToUse）
 		if (explicitArgs != null) {
 			argsToUse = explicitArgs;
 		}
 		else {
+			//表示 构造器参数需要做转换的参数引用。
 			Object[] argsToResolve = null;
 			synchronized (mbd.constructorArgumentLock) {
+				// 获取已解析的构造方法
+				//条件成立：说明当前bd生成实例，不是第一次..缓存中有解析好的构造器方法可以直接拿来反射调用...
 				constructorToUse = (Constructor<?>) mbd.resolvedConstructorOrFactoryMethod;
+				// constructorArgumentsResolved 条件成立,说明构造器参数已经解析过了..
 				if (constructorToUse != null && mbd.constructorArgumentsResolved) {
+					// 获取已解析的构造方法参数列表
 					// Found a cached constructor...
 					argsToUse = mbd.resolvedConstructorArguments;
 					if (argsToUse == null) {
+						// 若 argsToUse 为空，则获取未解析的构造方法参数列表
 						argsToResolve = mbd.preparedConstructorArguments;
 					}
 				}
 			}
+			//条件成立：resolvedConstructorArguments 参数是null，那preparedConstructorArguments一定是有值的。
 			if (argsToResolve != null) {
+				// 解析参数列表
 				argsToUse = resolvePreparedArguments(beanName, mbd, bw, constructorToUse, argsToResolve, true);
 			}
 		}
 
+		//条件成立：说明上面缓存机制失败，需要进行构造器匹配逻辑...autowireConstructors
 		if (constructorToUse == null || argsToUse == null) {
 			// Take specified constructors, if any.
+			// 获取构造方法列表
+			// chosenCtors 什么时候有数据呢？ 构造方法上有@Autowired注解时，chosenCtors才会有数据。
 			Constructor<?>[] candidates = chosenCtors;
+			//条件成立：说明外部程序调用当前autowireConstructors方法时，并没有提供好 可选用的构造器..咱们需要通过Class拿到构造器信息
 			if (candidates == null) {
 				Class<?> beanClass = mbd.getBeanClass();
 				try {
+					//isNonPublicAccessAllowed 返回true，表示当前bd中的Class非public的方法也可以访问..
 					candidates = (mbd.isNonPublicAccessAllowed() ?
 							beanClass.getDeclaredConstructors() : beanClass.getConstructors());
 				}
@@ -168,62 +200,163 @@ class ConstructorResolver {
 				}
 			}
 
+			//执行到这里，可选用的构造方法，已经准备好了..具体使用哪一个 还不清楚..
+			//条件成立：说明当前实例化 想要使用无参构造方法！
 			if (candidates.length == 1 && explicitArgs == null && !mbd.hasConstructorArgumentValues()) {
 				Constructor<?> uniqueCandidate = candidates[0];
+				//条件成立:说明当前这个唯一可选项 构造器 就是 无参构造器！
 				if (uniqueCandidate.getParameterCount() == 0) {
 					synchronized (mbd.constructorArgumentLock) {
 						mbd.resolvedConstructorOrFactoryMethod = uniqueCandidate;
 						mbd.constructorArgumentsResolved = true;
 						mbd.resolvedConstructorArguments = EMPTY_ARGS;
 					}
+					//instantiate(beanName, mbd, uniqueCandidate, EMPTY_ARGS) 使用无参构造器 完成反射调用，创建出来实例对象。
 					bw.setBeanInstance(instantiate(beanName, mbd, uniqueCandidate, EMPTY_ARGS));
 					return bw;
 				}
 			}
 
 			// Need to resolve the constructor.
+			
 			boolean autowiring = (chosenCtors != null ||
 					mbd.getResolvedAutowireMode() == AutowireCapableBeanFactory.AUTOWIRE_CONSTRUCTOR);
+
+
+			//表示已经完成解析后的构造器参数值
 			ConstructorArgumentValues resolvedValues = null;
 
+			//表示构造器参数个数
 			int minNrOfArgs;
+			
+			
 			if (explicitArgs != null) {
 				minNrOfArgs = explicitArgs.length;
 			}
 			else {
 				ConstructorArgumentValues cargs = mbd.getConstructorArgumentValues();
+				//表示已经完成解析后的我们定义的构造器参数值
 				resolvedValues = new ConstructorArgumentValues();
+				/*
+				 * 确定构造方法参数数量，比如下面的配置：
+				 *     <bean id="persion" class="xyz.coolblog.autowire.Person">
+				 *         <constructor-arg index="0" value="xiaoming"/>
+				 *         <constructor-arg index="1" value="1"/>
+				 *         <constructor-arg index="2" value="man"/>
+				 *     </bean>
+				 *
+				 * 此时 minNrOfArgs = maxIndex + 1 = 2 + 1 = 3，除了计算 minNrOfArgs，
+				 * 下面的方法还会将 cargs 中的参数数据转存到 resolvedValues 中
+				 */
 				minNrOfArgs = resolveConstructorArguments(beanName, mbd, bw, cargs, resolvedValues);
 			}
-
+			
+			// 按照构造方法的访问权限级别和参数数量进行排序
+			//排序规则：public > 非公开 > 参数多的 > 参数少的
 			AutowireUtils.sortConstructors(candidates);
+
+			//这是什么？
+			//这个值越低，说明当前构造器参数列表类型和构造器参数匹配度越高，
+			// 反之，这个值越高，说明当前构造器参数列表类型和构造器参数匹配度越低..
 			int minTypeDiffWeight = Integer.MAX_VALUE;
+
+			//模棱两可的构造器？ 假设第二个构造器的diffWeight值 与上一个一致，则将其放入到该集合..
 			Set<Constructor<?>> ambiguousConstructors = null;
 			LinkedList<UnsatisfiedDependencyException> causes = null;
 
+			//筛选可选项 构造方法，找出一个diffWeight最低的构造器
 			for (Constructor<?> candidate : candidates) {
 				int parameterCount = candidate.getParameterCount();
-
+				/*
+				 * 下面的 if 分支的用途是：若匹配到到合适的构造方法了，提前结束 for 循环
+				 * constructorToUse != null 这个条件比较好理解，下面分析一下条件 argsToUse.length > paramTypes.length：
+				 * 前面说到 AutowireUtils.sortConstructors(candidates) 用于对构造方法进行
+				 * 排序，排序规则如下：
+				 *   1. 具有 public 访问权限的构造方法排在非 public 构造方法前
+				 *   2. 参数数量多的构造方法排在前面
+				 *
+				 * 假设现在有一组构造方法按照上面的排序规则进行排序，排序结果如下（省略参数名称）：
+				 *
+				 *   1. public Hello(Object, Object, Object)
+				 *   2. public Hello(Object, Object)
+				 *   3. public Hello(Object)
+				 *   4. protected Hello(Integer, Object, Object, Object)
+				 *   5. protected Hello(Integer, Object, Object)
+				 *   6. protected Hello(Integer, Object)
+				 *
+				 * argsToUse = [num1, obj2]，可以匹配上的构造方法2和构造方法6。由于构造方法2有
+				 * 更高的访问权限，所以没理由不选他（尽管后者在参数类型上更加匹配）。由于构造方法3
+				 * 参数数量 < argsToUse.length，参数数量上不匹配，也不应该选。所以
+				 * argsToUse.length > paramTypes.length 这个条件用途是：在条件
+				 * constructorToUse != null 成立的情况下，通过判断参数数量与参数值数量
+				 * （argsToUse.length）是否一致，来决定是否提前终止构造方法匹配逻辑。
+				 */
 				if (constructorToUse != null && argsToUse != null && argsToUse.length > parameterCount) {
 					// Already found greedy constructor that can be satisfied ->
 					// do not look any further, there are only less greedy constructors left.
 					break;
 				}
+
+				/*
+				 * minNrOfArgs表示bd中配置的构造器参数个数
+				 * parameterCount 表示当前构造器参数个数
+				 * 前构造器参数个数低于配置的参数数量，则忽略当前构造方法，并重试。比如
+				 * argsToUse = [obj1, obj2,  obj3, obj4]，上面的构造方法列表中，
+				 * 构造方法1、2和3显然不是合适选择，忽略之。
+				 */
 				if (parameterCount < minNrOfArgs) {
 					continue;
 				}
 
 				ArgumentsHolder argsHolder;
+				//获取当前构造器参数类型数组..
 				Class<?>[] paramTypes = candidate.getParameterTypes();
+				// resolvedValues 表示已经完成解析后的我们定义的构造器参数值
+				// 条件成立：说明bd中配置了构造器参数
 				if (resolvedValues != null) {
 					try {
+						/*
+						 * 判断否则方法是否有 ConstructorProperties 注解，若有，则取注解中的
+						 * 值。比如下面的代码：
+						 *
+						 *  public class Persion {
+						 *      private String name;
+						 *      private Integer age;
+						 *
+						 *      @ConstructorProperties(value = {"coolblog", "20"})
+						 *      public Persion(String name, Integer age) {
+						 *          this.name = name;
+						 *          this.age = age;
+						 *      }
+						 * }
+						 */
 						String[] paramNames = ConstructorPropertiesChecker.evaluate(candidate, parameterCount);
 						if (paramNames == null) {
 							ParameterNameDiscoverer pnd = this.beanFactory.getParameterNameDiscoverer();
+							
 							if (pnd != null) {
+								/*
+								 * 获取构造方法参数名称列表，比如有这样一个构造方法:
+								 *   public Person(String name, int age, String sex)
+								 *
+								 * 调用 getParameterNames 方法返回 paramNames = [name, age, sex]
+								 */
 								paramNames = pnd.getParameterNames(candidate);
 							}
 						}
+						/*
+						 * 创建参数值列表，返回 argsHolder 会包含进行类型转换后的参数值，比如下
+						 * 面的配置:
+						 *
+						 *     <bean id="persion" class="xyz.coolblog.autowire.Person">
+						 *         <constructor-arg name="name" value="xiaoming"/>
+						 *         <constructor-arg name="age" value="1"/>
+						 *         <constructor-arg name="sex" value="man"/>
+						 *     </bean>
+						 *
+						 * Person 的成员变量 age 是 Integer 类型的，但由于在 Spring 配置中
+						 * 只能配成 String 类型，所以这里要进行类型转换。
+						 */
 						argsHolder = createArgumentArray(beanName, mbd, resolvedValues, bw, paramTypes, paramNames,
 								getUserDeclaredConstructor(candidate), autowiring, candidates.length == 1);
 					}
@@ -246,9 +379,24 @@ class ConstructorResolver {
 					}
 					argsHolder = new ArgumentsHolder(explicitArgs);
 				}
-
+				/*
+				 * 计算参数值（argsHolder.arguments）每个参数类型与构造方法参数列表
+				 * （paramTypes）中参数的类型差异量，差异量越大表明参数类型差异越大。参数类型差异
+				 * 越大，表明当前构造方法并不是一个最合适的候选项。引入差异量（typeDiffWeight）
+				 * 变量目的：是将候选构造方法的参数列表类型与参数值列表类型的差异进行量化，通过量化
+				 * 后的数值筛选出最合适的构造方法。
+				 *
+				 * 讲完差异量，再来说说 mbd.isLenientConstructorResolution() 条件。
+				 * LenientConstructorResolution == true 表示 ambiguousConstructors 允许有数据
+				 * LenientConstructorResolution == false 表示 ambiguousConstructors 不允许有数据，有数据的话 会报错..
+				 */
+				
+				//typeDiffWeight 数值越高说明构造器与参数匹配度越低...
+				//计算出当前构造器参数类型 与 当前 构造器参数 匹配度。
 				int typeDiffWeight = (mbd.isLenientConstructorResolution() ?
 						argsHolder.getTypeDifferenceWeight(paramTypes) : argsHolder.getAssignabilityWeight(paramTypes));
+
+				//条件成立：说明当前循环处理的 构造器 比上一次筛选出来的构造器 更优先。
 				// Choose this constructor if it represents the closest match.
 				if (typeDiffWeight < minTypeDiffWeight) {
 					constructorToUse = candidate;
@@ -257,6 +405,11 @@ class ConstructorResolver {
 					minTypeDiffWeight = typeDiffWeight;
 					ambiguousConstructors = null;
 				}
+				/*
+				 * 如果两个构造方法与参数值类型列表之间的差异量一致，那么这两个方法都可以作为
+				 * 候选项，这个时候就出现歧义了，这里先把有歧义的构造方法放入
+				 * ambiguousConstructors 集合中
+				 */
 				else if (constructorToUse != null && typeDiffWeight == minTypeDiffWeight) {
 					if (ambiguousConstructors == null) {
 						ambiguousConstructors = new LinkedHashSet<>();
@@ -265,7 +418,11 @@ class ConstructorResolver {
 					ambiguousConstructors.add(candidate);
 				}
 			}
-
+			
+			
+			
+			
+			// 若上面未能筛选出合适的构造方法，这里将抛出 BeanCreationException 异常
 			if (constructorToUse == null) {
 				if (causes != null) {
 					UnsatisfiedDependencyException ex = causes.removeLast();
@@ -278,6 +435,11 @@ class ConstructorResolver {
 						"Could not resolve matching constructor " +
 						"(hint: specify index/type/name arguments for simple parameters to avoid type ambiguities)");
 			}
+			/*
+			 * 如果 constructorToUse != null，且 ambiguousConstructors 也不为空，表明解析
+			 * 出了多个的合适的构造方法，此时就出现歧义了。Spring 不会擅自决定使用哪个构造方法，
+			 * 所以抛出异常。
+			 */
 			else if (ambiguousConstructors != null && !mbd.isLenientConstructorResolution()) {
 				throw new BeanCreationException(mbd.getResourceDescription(), beanName,
 						"Ambiguous constructor matches found in bean '" + beanName + "' " +
@@ -286,11 +448,21 @@ class ConstructorResolver {
 			}
 
 			if (explicitArgs == null && argsHolderToUse != null) {
+				/*
+				 * 缓存相关信息，比如：
+				 *   1. 已解析出的构造方法对象 resolvedConstructorOrFactoryMethod
+				 *   2. 构造方法参数列表是否已解析标志 constructorArgumentsResolved
+				 *   3. 参数值列表 resolvedConstructorArguments 或 preparedConstructorArguments
+				 *
+				 * 这些信息可用在其他地方，用于进行快捷判断
+				 */
 				argsHolderToUse.storeCache(mbd, constructorToUse);
 			}
 		}
 
 		Assert.state(argsToUse != null, "Unresolved constructor arguments");
+		//instantiate(beanName, mbd, constructorToUse, argsToUse)  根据上面一系列算法 和逻辑 
+		// 筛选出来的构造器 和 解析出来的参数 反射创建实例..
 		bw.setBeanInstance(instantiate(beanName, mbd, constructorToUse, argsToUse));
 		return bw;
 	}
@@ -300,6 +472,7 @@ class ConstructorResolver {
 
 		try {
 			InstantiationStrategy strategy = this.beanFactory.getInstantiationStrategy();
+			// if 条件分支里的一大坨是 Java 安全相关的代码，可以忽略，直接看 else 分支
 			if (System.getSecurityManager() != null) {
 				return AccessController.doPrivileged((PrivilegedAction<Object>) () ->
 						strategy.instantiate(mbd, beanName, this.beanFactory, constructorToUse, argsToUse),
