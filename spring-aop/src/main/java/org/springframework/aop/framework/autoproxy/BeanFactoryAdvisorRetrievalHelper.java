@@ -65,11 +65,18 @@ public class BeanFactoryAdvisorRetrievalHelper {
 	 * @see #isEligibleBean
 	 */
 	public List<Advisor> findAdvisorBeans() {
+		/**以下面是从容器中查找 Advisor 类型的 bean 所有的逻辑，代码虽然有点长，但并不复杂。主要做了两件事情：
+		 * 
+		 *     从容器中查找所有类型为 Advisor 的 bean 对应的名称
+		 *     遍历 advisorNames，并从容器中获取对应的 bean
+		 */
+		// cachedAdvisorBeanNames 是 advisor 名称的缓存
 		// Determine list of advisor bean names, if not cached already.
 		String[] advisorNames = this.cachedAdvisorBeanNames;
 		if (advisorNames == null) {
 			// Do not initialize FactoryBeans here: We need to leave all regular beans
 			// uninitialized to let the auto-proxy creator apply to them!
+			// 从容器中查找所有类型为 Advisor 的 bean 对应的名称
 			advisorNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
 					this.beanFactory, Advisor.class, true, false);
 			this.cachedAdvisorBeanNames = advisorNames;
@@ -78,6 +85,7 @@ public class BeanFactoryAdvisorRetrievalHelper {
 			return new ArrayList<>();
 		}
 
+		// 遍历 advisorNames，并从容器中获取对应的 bean
 		List<Advisor> advisors = new ArrayList<>();
 		for (String name : advisorNames) {
 			if (isEligibleBean(name)) {
@@ -88,6 +96,10 @@ public class BeanFactoryAdvisorRetrievalHelper {
 				}
 				else {
 					try {
+						/*
+						 * 调用 getBean 方法从容器中获取名称为 name 的 bean，
+						 * 并将 bean 添加到 advisors 中
+						 */
 						advisors.add(this.beanFactory.getBean(name, Advisor.class));
 					}
 					catch (BeanCreationException ex) {
