@@ -142,16 +142,22 @@ public class SpringServletContainerInitializer implements ServletContainerInitia
 	public void onStartup(@Nullable Set<Class<?>> webAppInitializerClasses, ServletContext servletContext)
 			throws ServletException {
 
+		// 存放所有的 Spring Web 应用容器初始化器
 		List<WebApplicationInitializer> initializers = new LinkedList<>();
-
+		// 当成功获取到所有的初始化器后对它们依次遍历
 		if (webAppInitializerClasses != null) {
+			// 过滤掉一些 servlet 容器为我们提供的无效类
 			for (Class<?> waiClass : webAppInitializerClasses) {
 				// Be defensive: Some servlet containers provide us with invalid classes,
 				// no matter what @HandlesTypes says...
+				// 即初始化器不能为接口也不能为抽象类，并且应当是 WebApplicationInitializer 的子类
+
 				if (!waiClass.isInterface() && !Modifier.isAbstract(waiClass.getModifiers()) &&
 						WebApplicationInitializer.class.isAssignableFrom(waiClass)) {
 					try {
+						// 将符合条件的初始化器添加到集合中
 						initializers.add((WebApplicationInitializer)
+								// 通过反射先获取构造方法的权限，然后通过构造方法创建其实例
 								ReflectionUtils.accessibleConstructor(waiClass).newInstance());
 					}
 					catch (Throwable ex) {
@@ -160,14 +166,16 @@ public class SpringServletContainerInitializer implements ServletContainerInitia
 				}
 			}
 		}
-
+		// 如果没有获取到任何初始化器实例则直接返回
 		if (initializers.isEmpty()) {
 			servletContext.log("No Spring WebApplicationInitializer types detected on classpath");
 			return;
 		}
 
 		servletContext.log(initializers.size() + " Spring WebApplicationInitializers detected on classpath");
+		// 获取到初始化器实例后先对它们进行排序
 		AnnotationAwareOrderComparator.sort(initializers);
+		// 对初始化器依次调用它们（父类 AbstractDispatcherServletInitializer）的 onStartup 方法
 		for (WebApplicationInitializer initializer : initializers) {
 			initializer.onStartup(servletContext);
 		}

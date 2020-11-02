@@ -47,6 +47,7 @@ public abstract class AbstractContextLoaderInitializer implements WebApplication
 
 	@Override
 	public void onStartup(ServletContext servletContext) throws ServletException {
+		// 创建、初始化根容器并注册容器加载监听器
 		registerContextLoaderListener(servletContext);
 	}
 
@@ -57,10 +58,16 @@ public abstract class AbstractContextLoaderInitializer implements WebApplication
 	 * @param servletContext the servlet context to register the listener against
 	 */
 	protected void registerContextLoaderListener(ServletContext servletContext) {
+		// 创建根容器（RootApplicationContext）  AbstractAnnotationConfigDispatcherServletInitializer.class
 		WebApplicationContext rootAppContext = createRootApplicationContext();
+		// 如果成功创建根容器（外部传入根容器配置类）
 		if (rootAppContext != null) {
+			// 为根容器创建一个容器加载监听器（ContextLoaderListener）
+			// 保证后面根容器的初始化逻辑得以被调用
 			ContextLoaderListener listener = new ContextLoaderListener(rootAppContext);
+			// 获取并设置根容器初始化器
 			listener.setContextInitializers(getRootApplicationContextInitializers());
+			// 将创建好的监听器添加到 Servlet 容器中
 			servletContext.addListener(listener);
 		}
 		else {

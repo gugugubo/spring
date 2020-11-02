@@ -540,13 +540,6 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	}
 
 	/**
-	 * 1. 从缓存中获取 BeanWrapper 实现类对象，并清理相关记录
-	 * 2. 若未命中缓存，则创建 bean 实例，并将实例包裹在 BeanWrapper 实现类对象中返回
-	 * 3. 应用 MergedBeanDefinitionPostProcessor 后置处理器相关逻辑
-	 * 4. 根据条件决定是否提前暴露 bean 的早期引用（early reference），用于处理循环依赖问题
-	 * 5. 调用 populateBean 方法向 bean 实例中填充属性
-	 * 6. 调用 initializeBean 方法完成余下的初始化工作
-	 * 7. 注册销毁逻辑
 	 * 
 	 * Actually create the specified bean. Pre-creation processing has already happened
 	 * at this point, e.g. checking {@code postProcessBeforeInstantiation} callbacks.
@@ -564,6 +557,15 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	protected Object doCreateBean(String beanName, RootBeanDefinition mbd, @Nullable Object[] args)
 			throws BeanCreationException {
 
+		/**
+		 * 1. 从缓存中获取 BeanWrapper 实现类对象，并清理相关记录
+		 * 2. 若未命中缓存，则创建 bean 实例，并将实例包裹在 BeanWrapper 实现类对象中返回
+		 * 3. 应用 MergedBeanDefinitionPostProcessor 后置处理器相关逻辑
+		 * 4. 根据条件决定是否提前暴露 bean 的早期引用（early reference），用于处理循环依赖问题
+		 * 5. 调用 populateBean 方法向 bean 实例中填充属性
+		 * 6. 调用 initializeBean 方法完成余下的初始化工作
+		 * 7. 注册销毁逻辑
+		 */
 		// Instantiate the bean.
 		/*
 		 * BeanWrapper 是一个基础接口，由接口名可看出这个接口的实现类用于包裹 bean 实例。

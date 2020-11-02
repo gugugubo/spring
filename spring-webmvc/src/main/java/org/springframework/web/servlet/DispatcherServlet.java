@@ -500,15 +500,121 @@ public class DispatcherServlet extends FrameworkServlet {
 	 * <p>May be overridden in subclasses in order to initialize further strategy objects.
 	 */
 	protected void initStrategies(ApplicationContext context) {
+		 //（文件上传解析器，只允许一个实例）初始化并添加MultipartResolver(MultipartResolver主要用于文件上传)至DispatcherServlet ；
+		/*一般配置如<bean id = "xxx" class="org.Springframework.web.multipart.commons.CommonsMultipartResolver">*/
 		initMultipartResolver(context);
+		//（本地化解析器，只允许一个实例）初始化LocaleResolver（国际化配置）;
+		/*第一种配置基于URL参数
+		配置如<bean id="XXX" class="org.Springframework.web.servlet.i8ln.AcceptHeaderLocaleResolver">
+		配合<a href="?locale=zh_CN">控制使用国际化化参数
+		第二种配置基于session，如果会话属性不存在，那么通过accept-language HTTP头部确定默认区域
+		第三种配置基于Cookie，这种策略常用于应用不支持会话或者状态必须保持在客户端的情况
+		配置如<bean id="XXX" class="org.Springframework.web.servlet.i8ln.CookieLocaleResolver">*/
+
 		initLocaleResolver(context);
+		
+		//     （主题解析器，只允许一个实例）初始化ThemeResolver;
+		    /*
+		org.Springframework.ui.context.ThemeSource是Spring中主题资源的接口，实现存放主题信息资源的类都应该实现该接口
+		通过配置
+		<bean id="xxx" class="org.Springframework.ui.context.support.ResourceBundleThemeSource">
+		其中ResourceBundleThemeSource就是实现了ThemeSource接口
+			<property name="basenamePrefix" value="com.test">
+			配置在com.test路径下查找资源文件
+		</bean>
+		ThemeSource配置了主题资源，不同用户的不同资源则由主题解析器定义。
+		由org.Springframework.web.servlet.ThemeResolver作为主题解析器的接口
+		该接口有三个实现类：
+		第一个是FixedThemeResolver用于设置固定主题
+		第二个是CookieThemeResolver效果是将主题以cookie的形式放在客户端的机器上
+		第三个是SessionThemeResolver效果是将主题保存在HTTP Session中
+		第四个是AbstractThemeResolver（是CookieThemeResolver和SessionThemeResolver的父类），用户可以继承它来实现自己的主题解析器
+		如果需要根据用户请求改变主题，那么Spring提供了一个已经实现的拦截器ThemeChangeInterceptor
+		主题拦截器的配置如下：
+		<bean id="XXX" class="org.Springframework.web.servlet.theme.ThemeChangeInterceptor">
+			<property name="paramName" value="themeName"></property>
+		</bean>
+		当然还需要在handlerMapping中添加该拦截器
+		<property name="interceptors">
+			<list>
+				<ref local="themeChangeInterceptor">
+			</list>
+		</property>
+		*/
 		initThemeResolver(context);
+		//     （处理器映射器，允许多个实例）初始化HandlerMappings；
+		    /*
+        当客户端发出Request时DispatchServlet会将Request提交给HandlerMapping，
+        然后HandlerMapping根据WebApplicationContext的配置回传给DispatcherServlet相应的Controller。
+        （当然调用时会按照优先级进行排序，优先级高的优先调用）
+        默认情况下SpringMVC会加载当前所有实现了HandlerMapping接口的bean，如果只希望加载指定的bean，那么可以如下配置：
+        <init-param>
+            <param-name>detectAllHandlerMappings</param-name>
+            <param-value>false</param-value>
+        </init-param>
+        之后将按照Dispatcher.properties中所定义的规则来默认加载
+    */
+		
+		
 		initHandlerMappings(context);
+		
+		//     （处理器适配器，允许多个实例）初始化HandlerAdapters；
+		    /*
+		Spring中有三个默认的适配器，如果没有在配置文件中定义自己的适配器，那么Spring会默认加载这三个适配器
+		当servlet通过处理器映射得到处理器之后，就会轮询处理器适配器模块，查找能够处理当前HTTP请求的处理器适配器的实现。下面介绍这三种默认的适配器：
+		1.HTTP请求处理器适配器
+		2.简单控制器处理器适配器
+		3.注解方法处理器适配器
+    */
 		initHandlerAdapters(context);
+		
+		//     （处理器异常解析器，允许多个实例）初始化HandlerExceptionResolvers；
+		    /*
+    需要实现HandlerExceptionResolver接口，该接口只有一个方法，该方法返回ModelAndView对象。
+    如果实现类的该方法返回了null那么Spring会继续寻找其他实现了该接口的bean，直到返回一个ModelAndView对象。
+    该类必须声明到Spring的applicationContext.xml中进行管理：
+    <bean id="xxx" class="实现类"/>
+    */
 		initHandlerExceptionResolvers(context);
+		
+		//     （视图名称解析器，只允许一个实例）初始化RequestToViewNameTranslator；
+		   /*
+    用于处理没有返回View对象或者逻辑视图名称，并且该方法中没有直接在response的输出流中写数据时，提供逻辑视图名称。
+    Spring提供了一个默认的实现DefaultRequestToViewNameTranslator
+    */
 		initRequestToViewNameTranslator(context);
+		
+		//     （视图解析器，允许多个实例）初始化ViewResolvers;
+		    /*
+    配置方法（于applicationContext.xml）：
+    <bean class="org.Springframework.web.servlet.view.InternalResourceViewResolver">
+        <property name="prefix" value="xxx"/>
+        ...
+    </bean>
+    */
 		initViewResolvers(context);
+		
+		//     （映射个管理器）初始化FlashMapManager；
+		    /*
+    Flashattributes提供了一个请求存储属性，在重定向时非常有用（在重定向之前暂存，以便继续使用）
+    FlashMap用于保持flashattributes；
+    FlashMapManager用于存储，检索，管理FlashMap实例
+    */
 		initFlashMapManager(context);
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
 	}
 
 	/**
@@ -1009,9 +1115,11 @@ public class DispatcherServlet extends FrameworkServlet {
 			Exception dispatchException = null;
 
 			try {
+				//如果是文件上传请求则进行特殊处理
 				processedRequest = checkMultipart(request);
 				multipartRequestParsed = (processedRequest != request);
 
+				// 获取可处理当前请求的处理器（也叫控制器/控制器处理器） Handler，对应流程图中的步骤②
 				// Determine handler for the current request.
 				mappedHandler = getHandler(processedRequest);
 				if (mappedHandler == null) {
@@ -1019,9 +1127,11 @@ public class DispatcherServlet extends FrameworkServlet {
 					return;
 				}
 
+				// 获取可执行处理器逻辑的适配器 HandlerAdapter，对应步骤③
 				// Determine handler adapter for the current request.
 				HandlerAdapter ha = getHandlerAdapter(mappedHandler.getHandler());
 
+				// 处理 last-modified 消息头
 				// Process last-modified header, if supported by the handler.
 				String method = request.getMethod();
 				boolean isGet = "GET".equals(method);
@@ -1032,10 +1142,12 @@ public class DispatcherServlet extends FrameworkServlet {
 					}
 				}
 
+				// 执行处理器 preHandle 方法
 				if (!mappedHandler.applyPreHandle(processedRequest, response)) {
 					return;
 				}
 
+				// 调用处理器逻辑，对应步骤④
 				// Actually invoke the handler.
 				mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
 
@@ -1043,7 +1155,10 @@ public class DispatcherServlet extends FrameworkServlet {
 					return;
 				}
 
+				// 如果 controller 未返回 ModelAndView 名称，这里生成默认的 ModelAndView 名称
 				applyDefaultViewName(processedRequest, mv);
+
+				// 执行拦截器 postHandle 方法
 				mappedHandler.applyPostHandle(processedRequest, response, mv);
 			}
 			catch (Exception ex) {
@@ -1054,6 +1169,8 @@ public class DispatcherServlet extends FrameworkServlet {
 				// making them available for @ExceptionHandler methods and other scenarios.
 				dispatchException = new NestedServletException("Handler dispatch failed", err);
 			}
+
+			// 解析并渲染视图
 			processDispatchResult(processedRequest, response, mappedHandler, mv, dispatchException);
 		}
 		catch (Exception ex) {
@@ -1115,6 +1232,7 @@ public class DispatcherServlet extends FrameworkServlet {
 
 		// Did the handler return a view to render?
 		if (mv != null && !mv.wasCleared()) {
+			// 渲染视图
 			render(mv, request, response);
 			if (errorView) {
 				WebUtils.clearErrorRequestAttributes(request);
@@ -1229,10 +1347,20 @@ public class DispatcherServlet extends FrameworkServlet {
 	 */
 	@Nullable
 	protected HandlerExecutionChain getHandler(HttpServletRequest request) throws Exception {
+		// 那么为什么要去找HandlerMapping去要一个Handler呢？首先我们在配置控制器的时候有两种方式1.xml方式，
+		// 2.注解的方式。因此spring源码他给我们不止一种控制器 。因为两种方式控制器 。
+		// 因此spring并不知道我们使用的事哪一种控制器。因为两种控制器，spring去底层去找的控制的实现方式是不一样的。
 		if (this.handlerMappings != null) {
 			for (HandlerMapping mapping : this.handlerMappings) {
+				// 调试可看当前HandlerMappers有两个对象也就是两个Handler。
+				// 因此可知上面说的，spring不止一个控制器；相当于他来这里面找他所要的控制器。一个是xml对应的，一个是注解对应的.
+				// 找到之后；他返回的是一个HandlerExecutionChain类型的Handler
+				
+				// Controller在对应的自定义的Controller对象名在控制器处理器中携带着，它被放在一个map中（路径为key,对象名为value）；
+				// 然后程序去遍历控制器处理器，通过请求路径去找到对应的处理器获取其中的Controller对象名称,最后与拦截器一起封装在HandlerExecutionChain一起返回
 				HandlerExecutionChain handler = mapping.getHandler(request);
 				if (handler != null) {
+					// 这里面封装了我们日常开发包Controller下对象,也就是我们自己的创建controlller
 					return handler;
 				}
 			}
@@ -1265,7 +1393,10 @@ public class DispatcherServlet extends FrameworkServlet {
 	 * @throws ServletException if no HandlerAdapter can be found for the handler. This is a fatal error.
 	 */
 	protected HandlerAdapter getHandlerAdapter(Object handler) throws ServletException {
+		// 获取控制器的适配器。也就是我们之前拿到了控制器，接下来要去执行控制器，也就是拿到控制器适配器执行控制器。
+		// 这里为什么要获取适配器呢？因为跟控制器映射器（也就是配置方式）一样。你就有不同的适配器。因此适配器也不是一个。跟我们上面Handler原理一样。
 		if (this.handlerAdapters != null) {
+			
 			for (HandlerAdapter adapter : this.handlerAdapters) {
 				if (adapter.supports(handler)) {
 					return adapter;
@@ -1344,8 +1475,14 @@ public class DispatcherServlet extends FrameworkServlet {
 		response.setLocale(locale);
 
 		View view;
+
+	
 		String viewName = mv.getViewName();
 		if (viewName != null) {
+			/*
+			 * 若 mv 中的 view 是 String 类型，即处理器返回的是模板名称，
+			 * 这里将其解析为具体的 View 对象  对应步骤5
+			 */
 			// We need to resolve the view name.
 			view = resolveViewName(viewName, mv.getModelInternal(), locale, request);
 			if (view == null) {
@@ -1370,6 +1507,7 @@ public class DispatcherServlet extends FrameworkServlet {
 			if (mv.getStatus() != null) {
 				response.setStatus(mv.getStatus().value());
 			}
+			// 渲染视图，并将结果返回给用户。对应步骤⑥和⑦
 			view.render(mv.getModelInternal(), request, response);
 		}
 		catch (Exception ex) {

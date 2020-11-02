@@ -60,7 +60,9 @@ public abstract class AbstractDispatcherServletInitializer extends AbstractConte
 
 	@Override
 	public void onStartup(ServletContext servletContext) throws ServletException {
+		// 调用父类 AbstractContextLoaderInitializer 中的 onStartup 方法
 		super.onStartup(servletContext);
+		// 创建并注册 registerDispatcherServlet
 		registerDispatcherServlet(servletContext);
 	}
 
@@ -76,33 +78,44 @@ public abstract class AbstractDispatcherServletInitializer extends AbstractConte
 	 * @param servletContext the context to register the servlet against
 	 */
 	protected void registerDispatcherServlet(ServletContext servletContext) {
+		// 获取 DispatcherServlet 将要注册的名称（默认为 dispatcher）
 		String servletName = getServletName();
 		Assert.hasLength(servletName, "getServletName() must not return null or empty");
 
+		// 创建子容器（ServletApplicationContext） AbstractAnnotationConfigDispatcherServletInitializer
 		WebApplicationContext servletAppContext = createServletApplicationContext();
 		Assert.notNull(servletAppContext, "createServletApplicationContext() must not return null");
 
+		// 创建一个绑定当前 WebApplicationContext 的 DispatcherServlet 实例
 		FrameworkServlet dispatcherServlet = createDispatcherServlet(servletAppContext);
 		Assert.notNull(dispatcherServlet, "createDispatcherServlet(WebApplicationContext) must not return null");
+		// 添加容器初始化器
 		dispatcherServlet.setContextInitializers(getServletApplicationContextInitializers());
 
+		// 将创建完成的 DispatcherServlet 实例添加到 WebApplicationContext 中
 		ServletRegistration.Dynamic registration = servletContext.addServlet(servletName, dispatcherServlet);
 		if (registration == null) {
 			throw new IllegalStateException("Failed to register servlet with name '" + servletName + "'. " +
 					"Check if there is another servlet registered under the same name.");
 		}
 
+		// 设置启动顺序（同 xml 文件中配置）
 		registration.setLoadOnStartup(1);
+		// 添加映射关系（getServletMappings 方法由我们自己实现，重写方法将 Servlet 映射关系传入）
 		registration.addMapping(getServletMappings());
+		// 设置是否支持异步
 		registration.setAsyncSupported(isAsyncSupported());
 
+		// 获取过滤器（getServletFilters 方法也由我们自己实现，重写方法将 Filter 传入）
 		Filter[] filters = getServletFilters();
 		if (!ObjectUtils.isEmpty(filters)) {
 			for (Filter filter : filters) {
+				// 注册过滤器
 				registerServletFilter(servletContext, filter);
 			}
 		}
 
+		// 可选再进行一次自定义注册（空实现）
 		customizeRegistration(registration);
 	}
 

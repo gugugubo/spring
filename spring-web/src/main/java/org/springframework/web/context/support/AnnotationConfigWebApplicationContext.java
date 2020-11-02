@@ -152,6 +152,7 @@ public class AnnotationConfigWebApplicationContext extends AbstractRefreshableWe
 	@Override
 	public void register(Class<?>... componentClasses) {
 		Assert.notEmpty(componentClasses, "At least one component class must be specified");
+		// AnnotationConfigWebApplicationContext.class
 		Collections.addAll(this.componentClasses, componentClasses);
 	}
 
